@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dei-GO | Route Assistant Chatbot</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>🗺️ Dei-GO</h1>
+      <p>AI Route Assistant for Yogyakarta City Destinations</p>
+    </header>
+
+    <main>
+      <div class="chat-container">
+        <div class="chat-box" id="chatbox">
+          <div class="bot-message">
+            👋 Halo! Saya <strong>Dei-GO</strong>, asisten rute Jogja. Ketik
+            destinasi kamu (asal & tujuan) dalam kalimat alami.
+          </div>
+        </div>
+
+        <div class="chat-input">
+          <input
+            type="text"
+            id="user-input"
+            placeholder="Contoh: Saya mau ke Tugu Jogja dari Malioboro..."
+          />
+          <button id="send-btn">Kirim</button>
+        </div>
+      </div>
+
+      <div class="map-container">
+        <h2>📍 Visualisasi Rute</h2>
+        <canvas id="graphCanvas" width="600" height="400"></canvas>
+      </div>
+    </main>
+
+    <footer>
+      <p>📘 PAES – AI Mini Project | Dei-GO Route Assistant for Yogyakarta</p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
