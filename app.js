@@ -10,14 +10,16 @@ const nodes = [
   "Bandara",
 ];
 
+// === Graph (jarak untuk visualisasi, bukan untuk perhitungan) ===
 const edges = {
-  "Tugu Jogja": { "Stasiun Tugu": 1, UGM: 4, Malioboro: 2 },
+  Monjali: { "Tugu Jogja": 2 },
+  "Tugu Jogja": { "Stasiun Tugu": 1.5, UGM: 2, Malioboro: 2 },
   "Stasiun Tugu": { Malioboro: 1 },
-  Malioboro: { Keraton: 2, UGM: 4, "Tugu Jogja": 2 },
-  Keraton: { "Alun-Alun Kidul": 1, UGM: 5, Malioboro: 2 },
-  "Alun-Alun Kidul": { Bandara: 9, Keraton: 1 },
+  Malioboro: { Keraton: 2, UGM: 3, "Tugu Jogja": 2 },
+  Keraton: { "Alun-Alun Kidul": 1, UGM: 4, Malioboro: 2 },
+  "Alun-Alun Kidul": { Bandara: 8, Keraton: 1 },
   UGM: { Monjali: 3, Bandara: 7 },
-  Monjali: { Bandara: 8 },
+  Bandara: {},
 };
 
 // === UI Elements ===
@@ -27,6 +29,13 @@ const sendBtn = document.getElementById("send-btn");
 const canvas = document.getElementById("graphCanvas");
 const ctx = canvas.getContext("2d");
 
+// === Transform state for zoom & pan ===
+let scale = 1;
+let originX = 0;
+let originY = 0;
+let isPanning = false;
+let startPan = { x: 0, y: 0 };
+
 // === Chat Utility ===
 function addMessage(text, sender = "bot") {
   const msg = document.createElement("div");
@@ -34,37 +43,6 @@ function addMessage(text, sender = "bot") {
   msg.innerHTML = `<div class="bubble">${text}</div>`;
   chatbox.appendChild(msg);
   chatbox.scrollTop = chatbox.scrollHeight;
-}
-
-// === Dijkstra Algorithm ===
-function dijkstra(start, end) {
-  const distances = {};
-  const previous = {};
-  const pq = new Set(Object.keys(edges));
-
-  for (let node of pq) distances[node] = Infinity;
-  distances[start] = 0;
-
-  while (pq.size) {
-    let minNode = Array.from(pq).reduce((a, b) =>
-      distances[a] < distances[b] ? a : b
-    );
-    pq.delete(minNode);
-
-    if (minNode === end) break;
-
-    for (let neighbor in edges[minNode]) {
-      let alt = distances[minNode] + edges[minNode][neighbor];
-      if (alt < distances[neighbor]) {
-        distances[neighbor] = alt;
-        previous[neighbor] = minNode;
-      }
-    }
-  }
-
-  let path = [];
-  for (let at = end; at; at = previous[at]) path.unshift(at);
-  return { path, distance: distances[end] };
 }
 
 // === Simple NLP ===
@@ -80,60 +58,122 @@ function extractLocations(text) {
 
 // === Graph Visualization ===
 function drawGraph(path = []) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.setTransform(scale, 0, 0, scale, originX, originY);
+  ctx.clearRect(
+    -originX / scale,
+    -originY / scale,
+    canvas.width / scale,
+    canvas.height / scale
+  );
+
   const pos = {
-    "Tugu Jogja": [100, 80],
-    "Stasiun Tugu": [200, 80],
-    Malioboro: [300, 120],
-    Keraton: [400, 200],
-    "Alun-Alun Kidul": [420, 300],
-    UGM: [250, 200],
-    Monjali: [200, 300],
-    Bandara: [520, 350],
+    Monjali: [250, 60],
+    "Tugu Jogja": [250, 150],
+    "Stasiun Tugu": [250, 230],
+    Malioboro: [250, 310],
+    Keraton: [250, 400],
+    "Alun-Alun Kidul": [250, 500],
+    UGM: [500, 250],
+    Bandara: [50, 550],
   };
 
-  // Draw edges
-  ctx.strokeStyle = "#ccc";
-  ctx.lineWidth = 1.5;
+  function drawCurvedLine(
+    x1,
+    y1,
+    x2,
+    y2,
+    color = "#ccc",
+    width = 1.5,
+    distanceText = null
+  ) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const cx = midX - dy * 0.15;
+    const cy = midY + dx * 0.15;
+
+    ctx.moveTo(x1, y1);
+    ctx.quadraticCurveTo(cx, cy, x2, y2);
+    ctx.stroke();
+
+    if (distanceText) {
+      ctx.font = `${11 / scale}px Poppins`;
+      ctx.fillStyle = "#555";
+      ctx.textAlign = "center";
+      ctx.fillText(distanceText, cx, cy - 5);
+    }
+  }
+
   for (let from in edges) {
     for (let to in edges[from]) {
       const [x1, y1] = pos[from];
       const [x2, y2] = pos[to];
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
+      drawCurvedLine(x1, y1, x2, y2, "#ccc", 1.5, edges[from][to] + " km");
     }
   }
 
-  // Highlight selected path
   if (path.length > 1) {
-    ctx.strokeStyle = "#4f46e5";
-    ctx.lineWidth = 3;
     for (let i = 0; i < path.length - 1; i++) {
       const [x1, y1] = pos[path[i]];
       const [x2, y2] = pos[path[i + 1]];
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
+      drawCurvedLine(x1, y1, x2, y2, "#4f46e5", 3);
     }
   }
 
-  // Draw nodes
   for (let node in pos) {
     const [x, y] = pos[node];
     ctx.beginPath();
-    ctx.arc(x, y, 18, 0, Math.PI * 2);
+    ctx.arc(x, y, 20, 0, Math.PI * 2);
     ctx.fillStyle = path.includes(node) ? "#4f46e5" : "#fff";
     ctx.fill();
     ctx.strokeStyle = "#333";
+    ctx.lineWidth = 1.5;
     ctx.stroke();
-    ctx.font = "10px Poppins";
+
+    ctx.font = `${11 / scale}px Poppins`;
     ctx.fillStyle = "#111";
-    ctx.fillText(node, x - 25, y - 25);
+    ctx.textAlign = "center";
+    ctx.fillText(node, x, y - 28);
   }
+
+  ctx.restore();
 }
+
+// === Zoom & Pan Controls ===
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const mouseX = e.offsetX;
+  const mouseY = e.offsetY;
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+
+  originX = mouseX - (mouseX - originX) * delta;
+  originY = mouseY - (mouseY - originY) * delta;
+  scale *= delta;
+
+  drawGraph();
+});
+
+canvas.addEventListener("mousedown", (e) => {
+  isPanning = true;
+  startPan = { x: e.clientX - originX, y: e.clientY - originY };
+});
+
+canvas.addEventListener("mousemove", (e) => {
+  if (isPanning) {
+    originX = e.clientX - startPan.x;
+    originY = e.clientY - startPan.y;
+    drawGraph();
+  }
+});
+
+canvas.addEventListener("mouseup", () => (isPanning = false));
+canvas.addEventListener("mouseleave", () => (isPanning = false));
 
 // === Chatbot Logic ===
 sendBtn.addEventListener("click", handleMessage);
@@ -141,7 +181,8 @@ input.addEventListener("keypress", (e) => {
   if (e.key === "Enter") handleMessage();
 });
 
-function handleMessage() {
+// ✅ Integrasi dengan Backend Flask
+async function handleMessage() {
   const text = input.value.trim();
   if (!text) return;
   addMessage(text, "user");
@@ -150,24 +191,35 @@ function handleMessage() {
   const locations = extractLocations(text);
   if (!locations) {
     addMessage(
-      "⚠️ Saya tidak mengenali destinasi tersebut. Coba sebutkan dua lokasi, seperti 'dari Malioboro ke UGM'."
+      "⚠️ Saya tidak mengenali destinasi tersebut. Coba sebutkan dua lokasi."
     );
     return;
   }
 
   const { start, end } = locations;
-  const result = dijkstra(start, end);
 
-  if (result.distance === Infinity) {
-    addMessage(`❌ Tidak ditemukan rute dari ${start} ke ${end}.`);
-    return;
+  try {
+    const response = await fetch("http://localhost:5000/api/route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ start, end }),
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      addMessage(`❌ ${data.error}`);
+    } else {
+      addMessage(
+        `✅ Rute terpendek: ${data.path.join(" → ")} (${data.distance} km)`
+      );
+      drawGraph(data.path);
+    }
+  } catch (err) {
+    console.error(err);
+    addMessage("🚨 Gagal terhubung ke server backend.");
   }
-
-  const routeText = result.path.join(" → ");
-  addMessage(
-    `✅ Rute terpendek adalah ${routeText}, dengan jarak sekitar ${result.distance} km.`
-  );
-  drawGraph(result.path);
 }
 
+// Initial draw
 drawGraph();
